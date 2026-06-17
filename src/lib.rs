@@ -196,7 +196,7 @@ mod wall_scattering;
 // }
 
 #[pyfunction]
-#[pyo3(signature = (config, sources, quiet=false))]
+#[pyo3(signature = (config, sources=None, quiet=false))]
 fn run(py: Python<'_>, config: &str, sources: Option<&str>, quiet: bool) -> PyResult<()> {
     match run_main(config, sources, !quiet) {
         Ok(output) => {
