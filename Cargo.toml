@@ -1,0 +1,28 @@
+[package]
+name = "phonon_monte_carlo"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "phonon_monte_carlo"
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow = "1.0"
+arrow-schema = "57.1.0"
+arrow-array = "57.1.0"
+fastrand = "2.3.0"
+interp = "2.1.2"
+parquet = "57.1.0"
+rayon = "1.11.0"
+rustfft = { version = "6", default-features = false }
+sci-rs = { version = "0.4.1", features = ["rustfft", "std"] }
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.7"
+pyo3 = { version = "0.28.3", features = ["extension-module", "abi3-py310"] }
+
+[profile.release]
+opt-level = 3
+debug = true
+lto = "thin"
+incremental = true
