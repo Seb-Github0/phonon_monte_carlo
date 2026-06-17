@@ -197,7 +197,7 @@ mod wall_scattering;
 
 #[pyfunction]
 #[pyo3(signature = (config, sources, quiet=false))]
-fn run(py: Python<'_>, config: &str, sources: &str, quiet: bool) -> PyResult<()> {
+fn run(py: Python<'_>, config: &str, sources: Option<&str>, quiet: bool) -> PyResult<()> {
     match run_main(config, sources, !quiet) {
         Ok(output) => {
             if !quiet {
@@ -218,7 +218,7 @@ fn phonon_monte_carlo(m: &Bound<'_, PyModule>) -> PyResult<()> {
     Ok(())
 }
 
-fn run_main(input_file: &str, sources_file: &str, verbose: bool) -> Result<String, String> {
+fn run_main(input_file: &str, sources_file: Option<&str>, verbose: bool) -> Result<String, String> {
     // Load configuration from input file
     let mut cfg = match Config::from_toml_file(input_file) {
         Ok(cfg) => cfg,
@@ -236,19 +236,20 @@ fn run_main(input_file: &str, sources_file: &str, verbose: bool) -> Result<Strin
     }
 
     // Load particle sources from file
-    let sources: Vec<PointXYZ> = if sources_file.is_empty() {
-        vec![PointXYZ {
-            x: cfg.particle_source.x,
-            y: cfg.particle_source.y,
-            z: cfg.particle_source.z,
-        }]
-    } else {
-        match load_particle_sources(sources_file) {
+    let sources: Vec<PointXYZ> = match sources_file {
+        Some(file) => match load_particle_sources(file) {
             Ok(sources) => sources,
             Err(e) => {
                 eprintln!("Error loading particle sources: {}", e);
                 return Err(format!("Error loading particle sources: {}", e));
             }
+        },
+        None => {
+            vec![PointXYZ {
+                x: cfg.particle_source.x,
+                y: cfg.particle_source.y,
+                z: cfg.particle_source.z,
+            }]
         }
     };
 
