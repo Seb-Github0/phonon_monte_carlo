@@ -44,6 +44,7 @@ pub enum SpecularityModel {
 pub enum DiffuseDistribution {
     Lambertian,
     Uniform,
+    SofferRough,
 }
 
 /// Distribution for specular top and bottom scattering.

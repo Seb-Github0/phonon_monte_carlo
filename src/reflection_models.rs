@@ -6,6 +6,72 @@ use crate::simulate::{SIN_TABLE_SIZE, SQRT_TABLE_SIZE, SinTable, SqrtTable};
 use fastrand::Rng;
 use std::f64::consts::FRAC_2_PI;
 
+/// Draw (sin(theta), cos(theta)) with theta distributed uniformly over 0..2pi.
+#[inline(always)]
+fn sample_sin_cos_uniform(rng: &mut Rng, sin_table: &SinTable) -> (f64, f64) {
+    // Note that the other part of this is precomputed in the SinTable
+    // If you change anything here, you have adapt the precomputation accordingly
+    let u = rng.u64(..) as usize;
+
+    // bitwise AND for fast modulo (ok because SIN_TABLE_SIZE is power of 2)
+    const MASK: usize = SIN_TABLE_SIZE - 1;
+    let idx = u & MASK;
+    let idx_cos = idx ^ MASK; // = MASK - idx
+
+    (sin_table[idx] as f64, sin_table[idx_cos] as f64)
+
+    // Example to show that indexing like this works:
+    //
+    // u = rng.usize(..)
+    //     -> random u64, e.g. ...11010011101101
+    //
+    // MASK = 0x1FFF
+    // idx = 0x14ED = 5357
+    // idx_cos = idx ^ MASK = 0xB12 = 2834
+    //
+    // s = sin_table[idx]
+    //   = sin(2*pi* ( 5357 + 0.5) / 8192 + 0.25*pi  )
+    //   = sin(2*pi* 5357.5 / 8192 + 0.25*pi  )
+    //   = sin(0.25*pi + 2*pi * 5357.5/8192)
+    //
+    // c = sin_table[idx_cos]
+    //   = sin(2*pi* (2834 + 0.5)/8192 + 0.25*pi)
+    //   = cos(pi/2 - 2*pi* (2834 + 0.5)/8192 - 0.25*pi)
+    //   = cos(0.25*pi - 2*pi * (2834 + 0.5)/8192)
+    //   = cos(0.25*pi - 2*pi * (2834 + 0.5)/8192 + 2*pi)
+    //   = cos(0.25*pi + 2*pi * (8192 - 2834 - 0.5)/8192)
+    //   = cos(0.25*pi + 2*pi * 5357.5/8192)
+    //
+    // -> indexing sine table like retrieves sine,cosine of the same value, as intended
+}
+
+/// Rotate vector (x,y,z) from hemisphere defined by normal (0, 0, 1)
+/// to hemisphere defined by normal (nx, ny, 0).
+/// Assume normal is normalized to length 1.
+#[inline(always)]
+pub fn rotate_vector_to_normal_hemisphere(
+    x: f64,
+    y: f64,
+    z: f64,
+    nx: f64,
+    ny: f64,
+) -> (f64, f64, f64) {
+    // Use the Rodrigues' rotation formula v_rot = k x v + (k . v)k
+    // Rotate around axis k = cross((0,0,1), normal) by angle 90° (special case nz=0)
+
+    // let n = Vec3 { x: nx, y: ny, z: 0.0 }; // not needed, k computed directly below
+    let v = Vec3 { x, y, z };
+    let k = Vec3 {
+        x: -ny,
+        y: nx,
+        z: 0.0,
+    };
+
+    let v_rot = k.cross(&v) + k.dot(&v) * k;
+
+    (v_rot.x, v_rot.y, v_rot.z)
+}
+
 /// Part of sampling from the Phong model.
 /// Sample new direction in the reference frame where the
 /// ideal reflection direction is along the z-axis
@@ -177,68 +243,28 @@ pub fn uniform_sample_hemisphere(rng: &mut Rng, sin_table: &SinTable) -> (f64, f
     (x, y, z, r)
 }
 
-/// Draw (sin(theta), cos(theta)) with theta distributed uniformly over 0..2pi.
+/// Sample new direction from the Soffer L=0 diffuse distribution in the rough limit.
+/// See paper Soffer1967, appendix.
+/// p(u) du = u0 (1 + u0) / (u0 + u)^2 du,  with u = cos(theta) from the surface normal
+/// and u0 = |cos(theta_incident)|. F(u) = (1+u0)u/(u0+u).
+/// Return (x, y, z, r) with r = sqrt(x^2 + y^2) for convenience.
+/// z is in range 0..1. x and y are in range -1..1.
+/// (x, y, z) is unit vector.
 #[inline(always)]
-fn sample_sin_cos_uniform(rng: &mut Rng, sin_table: &SinTable) -> (f64, f64) {
-    // Note that the other part of this is precomputed in the SinTable
-    // If you change anything here, you have adapt the precomputation accordingly
-    let u = rng.u64(..) as usize;
-
-    // bitwise AND for fast modulo (ok because SIN_TABLE_SIZE is power of 2)
-    const MASK: usize = SIN_TABLE_SIZE - 1;
-    let idx = u & MASK;
-    let idx_cos = idx ^ MASK; // = MASK - idx
-
-    (sin_table[idx] as f64, sin_table[idx_cos] as f64)
-
-    // Example to show that indexing like this works:
-    //
-    // u = rng.usize(..)
-    //     -> random u64, e.g. ...11010011101101
-    //
-    // MASK = 0x1FFF
-    // idx = 0x14ED = 5357
-    // idx_cos = idx ^ MASK = 0xB12 = 2834
-    //
-    // s = sin_table[idx]
-    //   = sin(2*pi* ( 5357 + 0.5) / 8192 + 0.25*pi  )
-    //   = sin(2*pi* 5357.5 / 8192 + 0.25*pi  )
-    //   = sin(0.25*pi + 2*pi * 5357.5/8192)
-    //
-    // c = sin_table[idx_cos]
-    //   = sin(2*pi* (2834 + 0.5)/8192 + 0.25*pi)
-    //   = cos(pi/2 - 2*pi* (2834 + 0.5)/8192 - 0.25*pi)
-    //   = cos(0.25*pi - 2*pi * (2834 + 0.5)/8192)
-    //   = cos(0.25*pi - 2*pi * (2834 + 0.5)/8192 + 2*pi)
-    //   = cos(0.25*pi + 2*pi * (8192 - 2834 - 0.5)/8192)
-    //   = cos(0.25*pi + 2*pi * 5357.5/8192)
-    //
-    // -> indexing sine table like retrieves sine,cosine of the same value, as intended
-}
-
-/// Rotate vector (x,y,z) from hemisphere defined by normal (0, 0, 1)
-/// to hemisphere defined by normal (nx, ny, 0).
-/// Assume normal is normalized to length 1.
-#[inline(always)]
-pub fn rotate_vector_to_normal_hemisphere(
-    x: f64,
-    y: f64,
-    z: f64,
-    nx: f64,
-    ny: f64,
-) -> (f64, f64, f64) {
-    // Use the Rodrigues' rotation formula v_rot = k x v + (k . v)k
-    // Rotate around axis k = cross((0,0,1), normal) by angle 90° (special case nz=0)
-
-    // let n = Vec3 { x: nx, y: ny, z: 0.0 }; // not needed, k computed directly below
-    let v = Vec3 { x, y, z };
-    let k = Vec3 {
-        x: -ny,
-        y: nx,
-        z: 0.0,
+pub fn soffer_rough_sample_hemisphere(
+    rng: &mut Rng,
+    u0: f64,
+    sin_table: &SinTable,
+) -> (f64, f64, f64, f64) {
+    let xi = rng.f64_inclusive();
+    let z = match xi {
+        1.0 => 1.0,
+        _ => xi * u0 / (1.0 + u0 - xi),
     };
+    let r = (1.0 - z * z).sqrt();
 
-    let v_rot = k.cross(&v) + k.dot(&v) * k;
-
-    (v_rot.x, v_rot.y, v_rot.z)
+    let (phi_sin, phi_cos) = sample_sin_cos_uniform(rng, sin_table);
+    let x = r * phi_cos;
+    let y = r * phi_sin;
+    (x, y, z, r)
 }

@@ -69,7 +69,7 @@
 //!
 //! On Rust: Rust is similar to C/C++ (it's fast and low level),
 //! except that it helps avoid many common bugs, such as memory leaks or type mismatches.
-//! Python bindings can be created using the python module `maturin`.
+//! Python bindings can be created using the python module `maturin` with `maturin build --release`.
 //!
 //! ## Limitations
 //! The current model is one of the simplest possible. It is probably not quantitatively accurate.

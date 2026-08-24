@@ -166,7 +166,7 @@ pub struct Config {
     #[serde(skip)]
     pub(crate) phong_exponent_sampling: f64,
     /// Angular distribution after diffuse scattering at top/bottom surfaces.
-    /// Must be "Lambertian" or "Uniform".  
+    /// Must be "Lambertian", "Uniform" or "SofferRough".  
     ///
     /// If "Lambertian", the distribution is weighted by cos(theta),
     /// favoring angles close to the surface normal. This is how full diffuse scattering
@@ -174,6 +174,13 @@ pub struct Config {
     ///
     /// If "Uniform", all angles are equally probable.
     /// This weights angles close to the surface more strongly compared to "Lambertian".
+    ///
+    /// If "SofferRough", uses the distribution suggested in the paper [Sof67] for
+    /// surface roughness correlation length L=0 and the limit of infinite roughness.
+    /// This distribution weights angles close to the surface even more strongly
+    /// than "Uniform" does.
+    /// [Sof67] Stephen B. Soffer; Statistical Model for the Size Effect in Electrical Conduction.
+    ///         J. Appl. Phys. 15 March 1967; 38 (4): 1710–1715. https://doi.org/10.1063/1.1709746
     pub diffuse_distribution: String,
 
     // Post-processing
@@ -332,7 +339,7 @@ impl Config {
 
         // Check that diffuse_distribution is valid
         match self.diffuse_distribution.to_lowercase().as_str() {
-            "lambertian" | "uniform" => {}
+            "lambertian" | "uniform" | "sofferrough" => {}
             _ => {
                 return Err(anyhow!(
                     "diffuse_distribution must be 'Lambertian' or 'Uniform', got '{}'",

@@ -190,6 +190,7 @@ fn set_up_simulation(cfg: &Config) -> Result<SimulationSetup, String> {
     let diffuse_distribution = match cfg.diffuse_distribution.to_lowercase().as_str() {
         "lambertian" => DiffuseDistribution::Lambertian,
         "uniform" => DiffuseDistribution::Uniform,
+        "sofferrough" => DiffuseDistribution::SofferRough,
         _ => panic!("Invalid diffuse distribution specified in config."),
     };
 

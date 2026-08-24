@@ -8,7 +8,7 @@ use crate::data_structures::{
 use crate::phonon::Phonon;
 use crate::reflection_models::{
     cosine_sample_hemisphere, sample_phong_model, sample_phong_model_rescaled,
-    uniform_sample_hemisphere,
+    soffer_rough_sample_hemisphere, uniform_sample_hemisphere,
 };
 use crate::simulate::{EnergyResults, SinTable, SqrtTable};
 use fastrand::Rng;
@@ -68,6 +68,11 @@ fn in_plane_surface_scattering(
         let (x, y, z, _) = match diffuse_distribution {
             DiffuseDistribution::Lambertian => cosine_sample_hemisphere(rng, sin_table, sqrt_table),
             DiffuseDistribution::Uniform => uniform_sample_hemisphere(rng, sin_table),
+            DiffuseDistribution::SofferRough => {
+                let cos_theta = pt.vz * pt.speed_inv;
+                let u0 = cos_theta.abs();
+                soffer_rough_sample_hemisphere(rng, u0, sin_table)
+            }
         };
 
         pt.vx = x * pt.speed;
