@@ -1,0 +1,228 @@
+# Configuration file that is read in at program startup
+# Note that this is a TOML file not a python file, it can't do any calculations itself
+# You can auto-generate TOML files from Python though.
+
+# ------ General settings ------
+# Path to output folder where results will be saved.
+output_folder = "example"
+
+# Number of particles to simulate.
+number_of_particles = 100
+
+# Whether to use multiprocessing for the simulation.
+# Uses all available CPU cores if true.
+# If false, runs single-threaded.
+use_multiprocessing = true
+num_workers = 4
+
+
+# Whether to write scattering points to output file.
+# Only works in single-threaded mode (`use_multiprocessing = false`)
+# Disable to save disk space.
+# If enabled, will write to path specified by `output_file_points`.
+# If enabled, it is recommended to reduce `number_of_particles`
+# to avoid (very) large output files.
+write_scattering_points = false
+
+# Whether to write the absorbed energy fraction at each time step to the output file.
+# Not necessary to get rise time. Disable to save disk space.
+write_absorbed_energy = false
+
+# Whether to write the lost energy fraction at each time step to the output file.
+# Not necessary to get absorbed energy fraction or rise time. Disable to save disk space.
+write_lost_energy = false
+
+# --------- Time parameters --------
+# Total simulation time in seconds.
+time_total = 100e-6
+# Size of each time bin in seconds. This determines the time resolution of the
+# data in `output.parquet`. It does not affect the simulation itself.
+time_bin_size = 0.2e-6
+
+# --------- Material parameters --------
+# Material name. Currently only "Si" (silicon) is supported.
+material = "Si"
+
+# Particle speed in m/s. Typical value for transverse acoustic phonons in silicon is ~6000 m/s.
+default_speed = 6000.0
+
+# Whether to use branch-specific speed given by material.
+# If true, at each scattering event, a phonon branch (LA, TA1, TA2)
+# is randomly assigned and the corresponding speed in the material is used.
+# If false, `default_speed` is used.
+use_branch_speed = false
+
+# --------- Absorption --------
+# Absorption probability when a particle hits an absorber region (0.0 to 1.0).
+# This probability is assumed to be constant, independent of incidence angle.
+absorptivity = 1.0   # between 0 and 1, fraction of energy absorbed at each absorption event
+
+# Absorber region defined by a list of polygons. 
+# Each polygon is specified as a list of points [[x1, y1], [x2, y2], ...].
+# Each polygon must be convex. Supports only line segments.
+absorbers.polygons = [[[-0.011237, 0.0071], [-0.010907, 0.0071], 
+                       [-0.010907, 0.0154],  [-0.011237, 0.0154]], 
+                      [[-0.011592, 0.0071], [-0.011262, 0.0071], 
+                       [-0.011262, 0.0154],  [-0.011592, 0.0154]]]
+
+
+# Clamps
+# Whether to include clamps in the geometry. 
+# Without clamps, energy loss is assumed to happen only at the bridge wall segments. 
+# Clamps specify where particles are assumed lost when hitting the top or bottom surface.
+include_clamps = false
+# region specifying the top clamp. List of polygons, like absorbers.polygons.
+clamps_top.polygons = []
+# region specifying the bottom clamp. List of polygons, like absorbers.polygons.
+clamps_bottom.polygons = []
+# Fraction of particle energy lost when particles hit the top or bottom surface in the region of the clamps.
+clamps_absorptivity = 1.0  # between 0 and 1
+
+# Internal scattering (Currently not implemented.)
+include_internal_scattering = false
+
+# ---------- System dimensions [m] -----------
+# Domain extends from z=-thickness/2 to z=thickness/2.
+thickness = 380e-6
+
+# If enabled, all particles are initialized with z=0 and vz=0, meaning no scattering at top/bottom surfaces. 
+# Only compatible with specular wall scattering. Not compatible with diffuse wall scattering.
+is_two_dimensional_material = false
+
+# ---------- Diffuse Scattering and Roughness [m] --------------------
+[top_scattering_config]
+# Model to determine whether scattering at the top/bottom surfaces is specular or diffuse.
+# Must be "Constant" or "Soffer".
+# If "Constant", the probability of specular scattering is given by `p_specular`,
+# independent of incidence angle.
+# If "Soffer", the probability of specular scattering depends on the incidence angle
+# like ``p_specular(theta) = exp(-4 * pi^2 * roughness^2 * k^2 * cos(theta)^2``.
+# Assuming that k is approximately constant, ``p_specular(theta) = exp(-C * cos(theta)^2)`` is used here.
+# The prefactor C can be set by `specularity_roughness_prefactor`.
+specularity_model = "Constant"      # "Constant" or "Soffer"
+# Probability of specular scattering at top/bottom surfaces, when specularity_model="Constant".
+# (1.0 = fully specular, 0.0 = fully diffuse). Must be between 0.0 and 1.0.
+p_specular = 0.0
+# Prefactor for the roughness in the Soffer model of specularity.
+# Higher values correspond to a rougher surface and lower the probability of specular scattering..
+# Must be >= 0.0.
+specularity_roughness_prefactor = 0.0 
+# Angular distribution after specular scattering at top/bottom surfaces.
+# Must be "Ideal", "Phong", or "PhongRescaled".
+specular_distribution = "Ideal"
+# Phong exponent for specular scattering angular distribution.
+# Only used if `specular_distribution` is "Phong" or "PhongRescaled".
+# Higher values lead to a narrower distribution around the mirror angle.
+phong_exponent = 100
+# Angular distribution after diffuse scattering at top/bottom surfaces.
+# Must be "Lambertian" or "Uniform".  
+#
+# If "Lambertian", the distribution is weighted by cos(theta),
+# favoring angles closer to the surface normal. This is how full diffuse scattering
+# is usually modelled in Ray Tracing software for computer graphics.  
+#
+# If "Uniform", all angles are equally probable.
+# This weights angles close to the surface more strongly compared to "Lambertian".
+diffuse_distribution = "Uniform"
+
+# Same for bottom surface
+[bottom_scattering_config]
+specularity_model = "Constant"
+p_specular = 0.0
+specularity_roughness_prefactor = 0.0
+specular_distribution = "Ideal"
+phong_exponent = 100
+diffuse_distribution = "Uniform"
+
+
+# Post-processing
+[post_processing]
+# Whether to calculate sensor temperature rise based on absorbed energy timeline.
+# If true, requires c_abs, c_sens, and g_abs_sens to be set and
+# a column will be added to the output.parquet file.
+# The calculation numerically integrates the corresponding ODE system.
+calculate_sensor_temperature = false
+# Heat capacity C of the absorber in J/K
+c_abs = 1.0
+# Heat capacity C of the sensor in J/K
+c_sens = 1.0
+# Thermal conductivity G between absorber and sensor in W/K
+g_abs_sens = 1.0
+# Whether to calculate the threshold-to-threshold rise time
+calculate_rise_time = true
+# Start threshold for rise time calculation, as a fraction of the signal maximum (0.0 to 1.0).
+rise_time_threshold_start = 0.1
+# End threshold for rise time calculation, as a fraction of the signal maximum (0.0 to 1.0).
+rise_time_threshold_end = 0.8
+# Whether to convolve the absorbed energy signal with a decay template before calculating the rise time.
+convolve_with_decay_template = false
+# Absolute path to the decay template file (CSV format). The file is assumed to have two columns, column 0 is time, column 1 is value, separated by a comma. The file is assumed to have one header row.
+file_decay_template = ""
+
+# Position where particles are created.
+# If use_exponential_distribution is true, the position of the source is sampled from
+# an exponential distribution with mean depth mean_source_depth below the top surface.
+# If use_exponential_distribution is false, the depth of the source is fixed at z.
+# 
+# If the simulation should be run multiple times with different particle sources,
+# you can specify them as a .parquet file (columns: "Source X", "Source Y", "Source Z") and call the simulation as:
+#   phonon_monte_carlo.exe -input=/path/to/config.toml -source=/path/to/sources.parquet
+# You can generate this .parquet file for instance from python using
+#   import pandas as pd
+#   sources = pd.DataFrame({"Source X": [...], "Source Y": [...], "Source Z": [...]})
+#   sources.to_parquet("sources.parquet")
+# The parameters `use_exponential_distribution` and `mean_source_depth` are kept 
+# the same even when multiple source positions are specified via a .parquet file.
+[particle_source]
+x = -13e-3
+y = 13e-3
+z = 0.0
+use_exponential_distribution = false
+mean_source_depth = 28e-6
+
+
+[outside_wall]
+# List of XY-Points defining the polygon.
+# Must specify a convex polygon.
+# The last point is connected automatically to the first point to close the polygon.
+points = [[-16250e-6, 18650e-6],
+    [-16600e-6, 18360e-6],
+    [-18360e-6, 16600e-6],
+    [-18650e-6, 16250e-6],
+    [-18650e-6, 6250e-6],
+    [-18360e-6, 5900e-6],
+    [-16600e-6, 4140e-6],
+    [-16250e-6, 3850e-6],
+    [-11450e-6, 3850e-6],
+    [-11000e-6, 3850e-6],
+    [-6250e-6, 3850e-6],
+    [-5900e-6, 4135e-6],
+    [-4135e-6, 5900e-6],
+    [-3850e-6, 6250e-6],
+    [-3850e-6, 16250e-6],
+    [-4135e-6, 16595e-6],
+    [-5900e-6, 18360e-6],
+    [-6250e-6, 18650e-6]
+]
+# List of booleans indicating whether each edge is a bridge (true) or solid wall (false).
+# Particles are lost when hitting a bridge edge,
+# but scattered when hitting a solid wall edge.  
+# 
+# is_bridge[i] corresponds to the edge from points[i] to points[i+1]
+is_bridge = [true, false, true, false,
+             true, false, true, false, 
+             true, false, true, false,
+             true, false, true, false, true, false]
+# Circle radius for each edge. Set to 0.0 for line segments.
+# Set to a positive value for Arc segments.
+circle_radius = [0.0, 0.0, 0.0, 0.0, 
+                 0.0, 0.0, 0.0, 0.0, 
+                 0.0, 0.0, 0.0, 0.0, 
+                 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+# Whether to use diffuse (else: specular) boundary reflection model at the wall
+diffuse_scattering = true
+# Whether this wall is an outer wall (else: inner wall = hole).
+is_outside = true
+
+
+

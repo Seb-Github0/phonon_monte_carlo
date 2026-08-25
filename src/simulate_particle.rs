@@ -21,9 +21,8 @@ pub fn simulate_particle(
     let clamps_top = &simulation_setup.clamps_top;
     let clamps_bottom = &simulation_setup.clamps_bottom;
     let material = &simulation_setup.material;
-    let specularity_model = &simulation_setup.specularity_model;
-    let specular_distribution = &simulation_setup.specular_distribution;
-    let diffuse_distribution = &simulation_setup.diffuse_distribution;
+    let top_scattering_cfg = &simulation_setup.top_scattering_settings;
+    let bottom_scattering_cfg = &simulation_setup.bottom_scattering_settings;
     let sin_table = &simulation_setup.sin_table;
     let sqrt_table = &simulation_setup.sqrt_table;
 
@@ -54,8 +53,8 @@ pub fn simulate_particle(
     let mut t = 0.0;
     while (t < time_total) && (pt.energy_fraction_remaining >= 1e-6) {
         // Get next scattering location
-        let top_intersection = time_to_top(&pt, cfg);
-        let bottom_intersection = time_to_bottom(&pt, cfg);
+        let top_intersection = time_to_top(&pt, cfg.thickness);
+        let bottom_intersection = time_to_bottom(&pt, cfg.thickness);
         let t_min = get_top_bottom_min_time(&top_intersection, &bottom_intersection);
         let wall_intersection = wall.time_to_wall(&pt, t_min);
         // might add internal scattering here later
@@ -108,9 +107,7 @@ pub fn simulate_particle(
                     clamps_top,
                     cfg,
                     &mut results,
-                    specularity_model,
-                    specular_distribution,
-                    diffuse_distribution,
+                    top_scattering_cfg,
                     &mut rng,
                     sin_table,
                     sqrt_table,
@@ -122,9 +119,7 @@ pub fn simulate_particle(
                     clamps_bottom,
                     cfg,
                     &mut results,
-                    specularity_model,
-                    specular_distribution,
-                    diffuse_distribution,
+                    bottom_scattering_cfg,
                     &mut rng,
                     sin_table,
                     sqrt_table,

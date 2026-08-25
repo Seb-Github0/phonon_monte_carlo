@@ -136,6 +136,16 @@ pub struct Config {
     /// Energy fraction lost by particles hitting the clamps, must be between 0.0 and 1.0.
     pub clamps_absorptivity: f64,
 
+    // Boundary Scattering
+    pub top_scattering_config: BoundaryScatteringConfig,
+    pub bottom_scattering_config: BoundaryScatteringConfig,
+
+    // Post-processing
+    pub post_processing: PostProcessingConfig,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BoundaryScatteringConfig {
     // Roughness
     /// Model to determine whether scattering at the top/bottom surfaces is specular or diffuse.
     /// Must be "Constant" or "Soffer".
@@ -161,10 +171,6 @@ pub struct Config {
     /// Higher values lead to a narrower distribution around the mirror angle.
     pub phong_exponent: i32,
 
-    // tell serde not to deserialize this field
-    #[doc(hidden)]
-    #[serde(skip)]
-    pub(crate) phong_exponent_sampling: f64,
     /// Angular distribution after diffuse scattering at top/bottom surfaces.
     /// Must be "Lambertian", "Uniform" or "SofferRough".  
     ///
@@ -182,9 +188,6 @@ pub struct Config {
     /// [Sof67] Stephen B. Soffer; Statistical Model for the Size Effect in Electrical Conduction.
     ///         J. Appl. Phys. 15 March 1967; 38 (4): 1710–1715. https://doi.org/10.1063/1.1709746
     pub diffuse_distribution: String,
-
-    // Post-processing
-    pub post_processing: PostProcessingConfig,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -226,13 +229,6 @@ impl Config {
             // Preserve toml error detail (it already mentions missing fields / line/col).
             anyhow!("Failed to parse TOML {}: {}. \nPlease fix the TOML file (missing or invalid keys) and try again.", path_ref.display(), e)
         })?;
-
-        // normalise distribution name
-        cfg.phong_exponent_sampling = if cfg.phong_exponent < 1 {
-            1.0
-        } else {
-            1.0 / (cfg.phong_exponent as f64 + 1.0)
-        };
 
         cfg.number_of_timesteps = (cfg.time_total / cfg.time_bin_size).ceil() as usize;
 
@@ -301,50 +297,52 @@ impl Config {
             ));
         }
 
-        match self.specularity_model.to_lowercase().as_str() {
-            "constant" | "soffer" => {}
-            _ => {
+        for boundary_cfg in [&self.top_scattering_config, &self.bottom_scattering_config] {
+            match boundary_cfg.specularity_model.to_lowercase().as_str() {
+                "constant" | "soffer" => {}
+                _ => {
+                    return Err(anyhow!(
+                        "specularity_model must be 'Constant' or 'Soffer', got '{}'",
+                        boundary_cfg.specularity_model
+                    ));
+                }
+            }
+
+            // Check that p_specular is between 0.0 and 1.0
+            if boundary_cfg.p_specular < 0.0 || boundary_cfg.p_specular > 1.0 {
                 return Err(anyhow!(
-                    "specularity_model must be 'Constant' or 'Soffer', got '{}'",
-                    self.specularity_model
+                    "p_specular must be between 0.0 and 1.0, got {}",
+                    boundary_cfg.p_specular
                 ));
             }
-        }
 
-        // Check that p_specular is between 0.0 and 1.0
-        if self.p_specular < 0.0 || self.p_specular > 1.0 {
-            return Err(anyhow!(
-                "p_specular must be between 0.0 and 1.0, got {}",
-                self.p_specular
-            ));
-        }
-
-        if self.specularity_roughness_prefactor < 0.0 {
-            return Err(anyhow!(
-                "specularity_roughness_prefactor must be >= 0.0, got {}",
-                self.specularity_roughness_prefactor
-            ));
-        }
-
-        // Check that specular_distribution is valid
-        match self.specular_distribution.to_lowercase().as_str() {
-            "ideal" | "phong" | "phongrescaled" => {}
-            _ => {
+            if boundary_cfg.specularity_roughness_prefactor < 0.0 {
                 return Err(anyhow!(
-                    "specular_distribution must be 'Ideal', 'Phong', or 'PhongRescaled', got '{}'",
-                    self.specular_distribution
+                    "specularity_roughness_prefactor must be >= 0.0, got {}",
+                    boundary_cfg.specularity_roughness_prefactor
                 ));
             }
-        }
 
-        // Check that diffuse_distribution is valid
-        match self.diffuse_distribution.to_lowercase().as_str() {
-            "lambertian" | "uniform" | "sofferrough" => {}
-            _ => {
-                return Err(anyhow!(
-                    "diffuse_distribution must be 'Lambertian' or 'Uniform', got '{}'",
-                    self.diffuse_distribution
-                ));
+            // Check that specular_distribution is valid
+            match boundary_cfg.specular_distribution.to_lowercase().as_str() {
+                "ideal" | "phong" | "phongrescaled" => {}
+                _ => {
+                    return Err(anyhow!(
+                        "specular_distribution must be 'Ideal', 'Phong', or 'PhongRescaled', got '{}'",
+                        boundary_cfg.specular_distribution
+                    ));
+                }
+            }
+
+            // Check that diffuse_distribution is valid
+            match boundary_cfg.diffuse_distribution.to_lowercase().as_str() {
+                "lambertian" | "uniform" | "sofferrough" => {}
+                _ => {
+                    return Err(anyhow!(
+                        "diffuse_distribution must be 'Lambertian' or 'Uniform', got '{}'",
+                        boundary_cfg.diffuse_distribution
+                    ));
+                }
             }
         }
 

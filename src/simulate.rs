@@ -1,8 +1,9 @@
 //! Run multiple particle simulations, either single-threaded or multi-threaded.
 
-use crate::config::Config;
+use crate::config::{BoundaryScatteringConfig, Config};
 use crate::data_structures::{
     DiffuseDistribution, ScatteringPoint, SpecularDistribution, SpecularityModel,
+    TopBottomScatteringConfig,
 };
 use crate::materials::Si;
 use crate::simulate_particle::simulate_particle;
@@ -30,9 +31,8 @@ pub struct SimulationSetup {
     pub clamps_top: Vec<AbsorberPolygon>,
     pub clamps_bottom: Vec<AbsorberPolygon>,
     pub material: Si,
-    pub specularity_model: SpecularityModel,
-    pub specular_distribution: SpecularDistribution,
-    pub diffuse_distribution: DiffuseDistribution,
+    pub top_scattering_settings: TopBottomScatteringConfig,
+    pub bottom_scattering_settings: TopBottomScatteringConfig,
     pub sin_table: SinTable,
     pub sqrt_table: SqrtTable,
 }
@@ -166,33 +166,8 @@ fn set_up_simulation(cfg: &Config) -> Result<SimulationSetup, String> {
         return Err("Particle source is not inside simulation domain.".to_string());
     }
 
-    let specularity_model: SpecularityModel = match cfg.specularity_model.to_lowercase().as_str() {
-        "constant" => SpecularityModel::Constant,
-        "soffer" => SpecularityModel::Soffer,
-        _ => {
-            eprintln!(
-                "Invalid specularity model specified in config. Valid options are: Constant, Soffer."
-            );
-            return Err("Invalid specularity model specified in config.".to_string());
-        }
-    };
-    let specular_distribution = match cfg.specular_distribution.to_lowercase().as_str() {
-        "ideal" => SpecularDistribution::Ideal,
-        "phong" => SpecularDistribution::Phong,
-        "phongrescaled" => SpecularDistribution::PhongRescaled,
-        _ => {
-            eprintln!(
-                "Invalid specular distribution specified in config. Valid options are: ideal, phong, phongrescaled."
-            );
-            std::process::exit(1);
-        }
-    };
-    let diffuse_distribution = match cfg.diffuse_distribution.to_lowercase().as_str() {
-        "lambertian" => DiffuseDistribution::Lambertian,
-        "uniform" => DiffuseDistribution::Uniform,
-        "sofferrough" => DiffuseDistribution::SofferRough,
-        _ => panic!("Invalid diffuse distribution specified in config."),
-    };
+    let top_scattering_settings = set_up_top_bottom_boundaries(&cfg.top_scattering_config)?;
+    let bottom_scattering_settings = set_up_top_bottom_boundaries(&cfg.bottom_scattering_config)?;
 
     let mut polygons = Vec::new();
     for polygon in &cfg.absorbers.polygons {
@@ -219,14 +194,64 @@ fn set_up_simulation(cfg: &Config) -> Result<SimulationSetup, String> {
         clamps_top,
         clamps_bottom,
         material,
-        specularity_model,
-        specular_distribution,
-        diffuse_distribution,
+        top_scattering_settings,
+        bottom_scattering_settings,
         sin_table,
         sqrt_table,
     };
 
     Ok(setup)
+}
+
+fn set_up_top_bottom_boundaries(
+    boundary_cfg: &BoundaryScatteringConfig,
+) -> Result<TopBottomScatteringConfig, String> {
+    let specularity_model: SpecularityModel = match boundary_cfg
+        .specularity_model
+        .to_lowercase()
+        .as_str()
+    {
+        "constant" => SpecularityModel::Constant,
+        "soffer" => SpecularityModel::Soffer,
+        _ => {
+            eprintln!(
+                "Invalid specularity model specified in config. Valid options are: Constant, Soffer."
+            );
+            return Err("Invalid specularity model specified in config.".to_string());
+        }
+    };
+    let specular_distribution = match boundary_cfg.specular_distribution.to_lowercase().as_str() {
+        "ideal" => SpecularDistribution::Ideal,
+        "phong" => SpecularDistribution::Phong,
+        "phongrescaled" => SpecularDistribution::PhongRescaled,
+        _ => {
+            eprintln!(
+                "Invalid specular distribution specified in config. Valid options are: ideal, phong, phongrescaled."
+            );
+            std::process::exit(1);
+        }
+    };
+    let diffuse_distribution = match boundary_cfg.diffuse_distribution.to_lowercase().as_str() {
+        "lambertian" => DiffuseDistribution::Lambertian,
+        "uniform" => DiffuseDistribution::Uniform,
+        "sofferrough" => DiffuseDistribution::SofferRough,
+        _ => panic!("Invalid diffuse distribution specified in config."),
+    };
+
+    let phong_exponent_sampling = if boundary_cfg.phong_exponent < 1 {
+        1.0
+    } else {
+        1.0 / (boundary_cfg.phong_exponent as f64 + 1.0)
+    };
+
+    Ok(TopBottomScatteringConfig {
+        specularity_model,
+        specular_distribution,
+        diffuse_distribution,
+        p_specular: boundary_cfg.p_specular,
+        phong_exponent_sampling,
+        specularity_roughness_prefactor: boundary_cfg.specularity_roughness_prefactor,
+    })
 }
 
 /// Average energy results over particles, and compute cumulative absorbed and lost energy.

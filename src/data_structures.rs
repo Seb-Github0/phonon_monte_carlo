@@ -54,6 +54,16 @@ pub enum SpecularDistribution {
     PhongRescaled,
 }
 
+// Parsed version of BoundaryScatteringConfig for use in the program
+pub struct TopBottomScatteringConfig {
+    pub specularity_model: SpecularityModel,
+    pub specular_distribution: SpecularDistribution,
+    pub diffuse_distribution: DiffuseDistribution,
+    pub p_specular: f64,
+    pub phong_exponent_sampling: f64,
+    pub specularity_roughness_prefactor: f64,
+}
+
 /// Outside or inside wall polygon consisting of line segments and/or circular arcs.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WallConfig {

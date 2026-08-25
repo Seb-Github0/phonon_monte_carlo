@@ -3,7 +3,7 @@
 use crate::config::Config;
 use crate::data_structures::{
     DiffuseDistribution, MinMax, PointXY, PointXYZ, Rectangle, SpecularDistribution,
-    SpecularityModel,
+    SpecularityModel, TopBottomScatteringConfig,
 };
 use crate::phonon::Phonon;
 use crate::reflection_models::{
@@ -18,15 +18,12 @@ use fastrand::Rng;
 /// For diffuse reflection, uses the distribution specified in the config file.
 fn in_plane_surface_scattering(
     pt: &mut Phonon,
-    cfg: &Config,
-    specularity_model: &SpecularityModel,
-    specular_distribution: &SpecularDistribution,
-    diffuse_distribution: &DiffuseDistribution,
+    cfg: &TopBottomScatteringConfig,
     rng: &mut Rng,
     sin_table: &SinTable,
     sqrt_table: &SqrtTable,
 ) {
-    let p_specular = match specularity_model {
+    let p_specular = match cfg.specularity_model {
         SpecularityModel::Constant => cfg.p_specular,
         SpecularityModel::Soffer => {
             let cos_theta = pt.vz * pt.speed_inv;
@@ -36,7 +33,7 @@ fn in_plane_surface_scattering(
     };
 
     if rng.f64() < p_specular {
-        match specular_distribution {
+        match cfg.specular_distribution {
             SpecularDistribution::Ideal => {
                 pt.vz = -pt.vz;
             }
@@ -65,7 +62,7 @@ fn in_plane_surface_scattering(
             }
         }
     } else {
-        let (x, y, z, _) = match diffuse_distribution {
+        let (x, y, z, _) = match cfg.diffuse_distribution {
             DiffuseDistribution::Lambertian => cosine_sample_hemisphere(rng, sin_table, sqrt_table),
             DiffuseDistribution::Uniform => uniform_sample_hemisphere(rng, sin_table),
             DiffuseDistribution::SofferRough => {
@@ -94,13 +91,13 @@ fn in_plane_surface_scattering(
 /// Calculate time until intersection with top surface and the corresponding intersection point.
 /// Returns None if no intersection (i.e., vz <= 0).
 #[inline(always)]
-pub fn time_to_top(pt: &Phonon, cfg: &Config) -> Option<(f64, PointXYZ)> {
+pub fn time_to_top(pt: &Phonon, thickness: f64) -> Option<(f64, PointXYZ)> {
     if pt.vz > 0.0 {
-        let time_to_intersection = (cfg.thickness * 0.5 - pt.z) * pt.vz_abs_inv;
+        let time_to_intersection = (thickness * 0.5 - pt.z) * pt.vz_abs_inv;
         let intersection_point = PointXYZ {
             x: pt.x + pt.vx * time_to_intersection,
             y: pt.y + pt.vy * time_to_intersection,
-            z: cfg.thickness * 0.5,
+            z: thickness * 0.5,
         };
         Some((time_to_intersection, intersection_point))
     } else {
@@ -115,9 +112,7 @@ pub fn top_scattering(
     clamps_top: &[AbsorberPolygon],
     cfg: &Config,
     results: &mut EnergyResults,
-    specularity_model: &SpecularityModel,
-    specular_distribution: &SpecularDistribution,
-    diffuse_distribution: &DiffuseDistribution,
+    scattering_cfg: &TopBottomScatteringConfig,
     rng: &mut Rng,
     sin_table: &SinTable,
     sqrt_table: &SqrtTable,
@@ -141,29 +136,20 @@ pub fn top_scattering(
         }
     }
 
-    in_plane_surface_scattering(
-        pt,
-        cfg,
-        specularity_model,
-        specular_distribution,
-        diffuse_distribution,
-        rng,
-        sin_table,
-        sqrt_table,
-    );
+    in_plane_surface_scattering(pt, scattering_cfg, rng, sin_table, sqrt_table);
 }
 
 /// Calculate time until intersection with bottom surface
 /// and the corresponding intersection point.
 /// Returns None if no intersection (i.e., vz >= 0).
 #[inline(always)]
-pub fn time_to_bottom(pt: &Phonon, cfg: &Config) -> Option<(f64, PointXYZ)> {
+pub fn time_to_bottom(pt: &Phonon, thickness: f64) -> Option<(f64, PointXYZ)> {
     if pt.vz < 0.0 {
-        let time_to_intersection = (cfg.thickness * 0.5 + pt.z) * pt.vz_abs_inv;
+        let time_to_intersection = (thickness * 0.5 + pt.z) * pt.vz_abs_inv;
         let intersection_point = PointXYZ {
             x: pt.x + pt.vx * time_to_intersection,
             y: pt.y + pt.vy * time_to_intersection,
-            z: -cfg.thickness * 0.5,
+            z: -thickness * 0.5,
         };
         Some((time_to_intersection, intersection_point))
     } else {
@@ -178,9 +164,7 @@ pub fn bottom_scattering(
     clamps_bottom: &[AbsorberPolygon],
     cfg: &Config,
     results: &mut EnergyResults,
-    specularity_model: &SpecularityModel,
-    specular_distribution: &SpecularDistribution,
-    diffuse_distribution: &DiffuseDistribution,
+    scattering_cfg: &TopBottomScatteringConfig,
     rng: &mut Rng,
     sin_table: &SinTable,
     sqrt_table: &SqrtTable,
@@ -195,16 +179,7 @@ pub fn bottom_scattering(
         }
     }
 
-    in_plane_surface_scattering(
-        pt,
-        cfg,
-        specularity_model,
-        specular_distribution,
-        diffuse_distribution,
-        rng,
-        sin_table,
-        sqrt_table,
-    );
+    in_plane_surface_scattering(pt, scattering_cfg, rng, sin_table, sqrt_table);
 }
 
 /// Represents one or multiple convex, polygonal absorber regions on the top surface.

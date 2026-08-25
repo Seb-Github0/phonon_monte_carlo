@@ -1,0 +1,92 @@
+output_folder = "cool_example"
+number_of_particles = 1000
+temperature = 300
+write_scattering_points = false
+write_absorbed_energy = false
+write_lost_energy = false
+use_multiprocessing = true
+num_workers = 5
+time_total = 0.0001
+time_bin_size = 2e-7
+material = "Si"
+default_speed = 6000.0
+use_branch_speed = false
+absorptivity = 1.0
+include_clamps = false
+clamps_absorptivity = 1.0
+include_internal_scattering = false
+thickness = 0.00038
+is_two_dimensional_material = false
+
+[top_scattering_config]
+specularity_model = "Constant"
+p_specular = 0.0
+specularity_roughness_prefactor = 0.0
+specular_distribution = "Ideal"
+phong_exponent = 100
+diffuse_distribution = "Uniform"
+
+[bottom_scattering_config]
+specularity_model = "Constant"
+p_specular = 0.0
+specularity_roughness_prefactor = 0.0
+specular_distribution = "Ideal"
+phong_exponent = 100
+diffuse_distribution = "Uniform"
+
+[clamps_top]
+polygons = []
+
+[clamps_bottom]
+polygons = []
+
+[post_processing]
+calculate_sensor_temperature = false
+c_abs = 1.0
+c_sens = 1.0
+g_abs_sens = 1.0
+calculate_rise_time = true
+rise_time_threshold_start = 0.1
+rise_time_threshold_end = 0.8
+convolve_with_decay_template = false
+file_decay_template = ""
+
+[particle_source]
+x = -0.013
+y = 0.013
+z = 0.0
+use_exponential_distribution = false
+mean_source_depth = 2.8e-5
+
+[outside_wall]
+points = [[0.0, 0.005], [-0.005, 0.0], [0.0, -0.005], [0.005, 0.0]]
+is_bridge = [false, false, false, false]
+circle_radius = [0.005, 0.005, 0.005, 0.005]
+diffuse_scattering = true
+is_outside = true
+
+[absorbers]
+polygons = [
+    [
+        [
+            -0.001,
+            -0.001,
+        ],
+        [
+            0.001,
+            -0.001,
+        ],
+        [
+            0.001,
+            0.001,
+        ],
+        [
+            -0.001,
+            0.001,
+        ],
+        [
+            -0.001,
+            -0.001,
+        ],
+    ],
+]
