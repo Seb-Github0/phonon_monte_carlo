@@ -90,10 +90,7 @@ impl Phonon {
     /// while keeping the direction the same.
     #[inline(always)]
     pub fn assign_random_speed(&mut self) {
-        let branch = self
-            .rng
-            .choice([Branch::L, Branch::FT, Branch::ST])
-            .unwrap();
+        let branch = Si::get_random_branch(&mut self.rng);
         let speed_new = Si::get_speed(&branch);
         let speed_inv_new = Si::get_speed_inv(&branch);
         let factor = self.speed_inv * speed_new;
