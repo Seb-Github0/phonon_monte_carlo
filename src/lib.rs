@@ -145,6 +145,8 @@ use std::sync::Arc;
 
 pub mod config;
 pub mod data_structures;
+mod downconversion;
+mod isotope_scattering;
 mod materials;
 mod phonon;
 mod postprocessing;
@@ -372,12 +374,14 @@ fn write_scattering_points(
 ) {
     // Set up columns
     let fields = vec![
-        Field::new("Particle", DataType::UInt32, false),
-        Field::new("X", DataType::Float64, false),
-        Field::new("Y", DataType::Float64, false),
-        Field::new("Z", DataType::Float64, false),
-        Field::new("Time", DataType::Float64, false),
-        Field::new("Location", DataType::Utf8, false),
+        Field::new("event_number", DataType::UInt32, false),
+        Field::new("track_number", DataType::UInt32, false),
+        Field::new("x", DataType::Float64, false),
+        Field::new("y", DataType::Float64, false),
+        Field::new("z", DataType::Float64, false),
+        Field::new("time", DataType::Float64, false),
+        Field::new("energy", DataType::Float64, false),
+        Field::new("event", DataType::Utf8, false),
         #[cfg(debug_assertions)]
         Field::new("is_inside", DataType::Boolean, false),
     ];
@@ -392,21 +396,27 @@ fn write_scattering_points(
         .expect("Unable to create Parquet writer");
 
     // write points
-    for (i, scattering_points) in scattering_points_all.iter().enumerate() {
+    for scattering_points in scattering_points_all {
+        let mut event_number_values = Vec::with_capacity(scattering_points.len());
+        let mut track_number_values = Vec::with_capacity(scattering_points.len());
         let mut x_values = Vec::with_capacity(scattering_points.len());
         let mut y_values = Vec::with_capacity(scattering_points.len());
         let mut z_values = Vec::with_capacity(scattering_points.len());
         let mut time_values = Vec::with_capacity(scattering_points.len());
+        let mut energy_values = Vec::with_capacity(scattering_points.len());
         let mut location_values = Vec::with_capacity(scattering_points.len());
         #[cfg(debug_assertions)]
         let mut is_inside_values = Vec::with_capacity(scattering_points.len());
 
         for point in scattering_points {
+            event_number_values.push(point.event_number as u32);
+            track_number_values.push(point.track_number as u32);
             x_values.push(point.x);
             y_values.push(point.y);
             z_values.push(point.z);
             time_values.push(point.time);
-            location_values.push(point.location.as_str().to_string());
+            energy_values.push(point.energy);
+            location_values.push(point.event.as_str().to_string());
             #[cfg(debug_assertions)]
             is_inside_values.push(point.is_inside);
         }
@@ -420,11 +430,13 @@ fn write_scattering_points(
         }
 
         let columns: Vec<ArrayRef> = vec![
-            Arc::new(UInt32Array::from(vec![i as u32; scattering_points.len()])),
+            Arc::new(UInt32Array::from(event_number_values)),
+            Arc::new(UInt32Array::from(track_number_values)),
             Arc::new(Float64Array::from(x_values)),
             Arc::new(Float64Array::from(y_values)),
             Arc::new(Float64Array::from(z_values)),
             Arc::new(Float64Array::from(time_values)),
+            Arc::new(Float64Array::from(energy_values)),
             Arc::new(StringArray::from(location_values)),
             #[cfg(debug_assertions)]
             Arc::new(arrow_array::BooleanArray::from(is_inside_values)),

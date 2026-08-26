@@ -1,5 +1,7 @@
 //! Phonon, which is the particle being simulated.
 
+use fastrand::Rng;
+
 use crate::config::Config;
 use crate::materials::{Branch, Si};
 
@@ -9,6 +11,7 @@ use crate::materials::{Branch, Si};
 /// Each phonon is spawned with energy fraction remaining = 1.0, which is reduced when hitting absorbers or bridges.
 #[derive(Clone, Debug)]
 pub struct Phonon {
+    pub t: f64,
     pub x: f64,
     pub y: f64,
     pub z: f64,
@@ -18,8 +21,18 @@ pub struct Phonon {
     pub vz_abs_inv: f64,
     pub speed: f64,
     pub speed_inv: f64,
-    pub energy_fraction_remaining: f64,
+    pub energy: f64,
+    pub branch: Branch,
+    pub state: PhononState,
     pub rng: fastrand::Rng,
+}
+
+#[derive(PartialEq, Clone, Debug)]
+pub enum PhononState {
+    Alive,
+    Absorbed,
+    Lost,
+    Downconverted,
 }
 
 impl Phonon {
@@ -28,9 +41,14 @@ impl Phonon {
         let source = &cfg.particle_source;
         let (x, y, mut z) = source.generate_coordinates(cfg);
 
+        // Assign phonon branch
+        let mut rng = Rng::new();
+
         // Assign frequency
         let speed = material.default_speed;
-        let energy_fraction_remaining = 1.0;
+        let branch = Si::get_random_branch(&mut rng);
+        let energy = cfg.initial_phonon_energy;
+        let state = PhononState::Alive;
 
         // Assign initial angles
         let (phi, theta) = source.generate_angles();
@@ -50,10 +68,8 @@ impl Phonon {
         };
         let speed_inv = 1.0 / speed;
 
-        // Assign phonon branch
-        let rng = fastrand::Rng::new();
-
         Phonon {
+            t: 0.0,
             x,
             y,
             z,
@@ -63,7 +79,9 @@ impl Phonon {
             vz_abs_inv,
             speed,
             speed_inv,
-            energy_fraction_remaining,
+            energy,
+            branch,
+            state,
             rng,
         }
     }
@@ -74,7 +92,7 @@ impl Phonon {
     pub fn assign_random_speed(&mut self) {
         let branch = self
             .rng
-            .choice([Branch::LA, Branch::TA1, Branch::TA2])
+            .choice([Branch::L, Branch::FT, Branch::ST])
             .unwrap();
         let speed_new = Si::get_speed(&branch);
         let speed_inv_new = Si::get_speed_inv(&branch);

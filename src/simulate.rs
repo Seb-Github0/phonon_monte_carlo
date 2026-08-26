@@ -6,7 +6,7 @@ use crate::data_structures::{
     TopBottomScatteringConfig,
 };
 use crate::materials::Si;
-use crate::simulate_particle::simulate_particle;
+use crate::simulate_particle::simulate_event;
 use crate::top_bottom_scattering::{AbsorberPolygon, AbsorberRegion};
 use crate::wall_scattering::Wall;
 
@@ -75,7 +75,7 @@ fn precompute_tables() -> (SinTable, SqrtTable) {
 pub fn simulate_single_thread(
     cfg: &Config,
 ) -> Result<(Vec<Vec<ScatteringPoint>>, Vec<EnergyResults>), String> {
-    let number_of_particles = cfg.number_of_particles;
+    let number_of_events = cfg.number_of_events;
     let setup = set_up_simulation(cfg)?;
 
     // Initialize structure for simulation results
@@ -87,11 +87,11 @@ pub fn simulate_single_thread(
         cfg.number_of_timesteps
     ];
 
-    let mut scattering_points_all = Vec::with_capacity(number_of_particles);
+    let mut scattering_points_all = Vec::with_capacity(number_of_events);
 
     // main simulation loop
-    for _ in 0..number_of_particles {
-        let (scattering_points, e_results) = simulate_particle(&setup, cfg);
+    for i in 0..number_of_events {
+        let (scattering_points, e_results) = simulate_event(&setup, cfg, i);
 
         scattering_points_all.push(scattering_points);
         for t in 0..cfg.number_of_timesteps {
@@ -125,15 +125,15 @@ pub fn simulate_parallel(
     let scattering_points_all: Vec<Vec<ScatteringPoint>> = Vec::new();
 
     // Parallel simulation
-    let mut e_results_vec: Vec<EnergyResults> = (0..cfg.number_of_particles)
+    let mut e_results_vec: Vec<EnergyResults> = (0..cfg.number_of_events)
         .into_par_iter()
         // Run the simulation for each particle,
         // accumulating results in thread-local e_results vector.
         // Only care about the time-dependent energy results here
         .fold(
             || e_results_template.clone(),
-            |mut e_results_local, _i| {
-                let (_, e_results) = simulate_particle(&setup, cfg);
+            |mut e_results_local, i| {
+                let (_, e_results) = simulate_event(&setup, cfg, i);
                 for t in 0..cfg.number_of_timesteps {
                     e_results_local[t].e_loss += e_results[t].e_loss;
                     e_results_local[t].e_absorbed_total += e_results[t].e_absorbed_total;
@@ -257,10 +257,11 @@ fn set_up_top_bottom_boundaries(
 /// Average energy results over particles, and compute cumulative absorbed and lost energy.
 fn process_energies(e_results_vec: &mut [EnergyResults], cfg: &Config) {
     // Average results
+    let n = cfg.number_of_events as f64;
+    let total_initial_energy = n * cfg.initial_phonon_energy;
     for element in e_results_vec.iter_mut() {
-        let n = cfg.number_of_particles as f64;
-        element.e_loss /= n;
-        element.e_absorbed_total /= n;
+        element.e_loss /= total_initial_energy;
+        element.e_absorbed_total /= total_initial_energy;
     }
 
     // Compute cumulative sum of absorbed energy

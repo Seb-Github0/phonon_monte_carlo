@@ -243,6 +243,20 @@ pub fn uniform_sample_hemisphere(rng: &mut Rng, sin_table: &SinTable) -> (f64, f
     (x, y, z, r)
 }
 
+#[inline(always)]
+pub fn uniform_sample_sphere(rng: &mut Rng, sin_table: &SinTable) -> (f64, f64, f64, f64) {
+    // Based on https://www.pbr-book.org/3ed-2018/Monte_Carlo_Integration/2D_Sampling_with_Multidimensional_Transformations#UniformlySamplingaHemisphere
+
+    let z = 2.0 * rng.f64_inclusive() - 1.0;
+    let r = (1.0 - z * z).sqrt();
+
+    let (phi_sin, phi_cos) = sample_sin_cos_uniform(rng, sin_table);
+
+    let x = r * phi_cos;
+    let y = r * phi_sin;
+    (x, y, z, r)
+}
+
 /// Sample new direction from the Soffer L=0 diffuse distribution in the rough limit.
 /// See paper Soffer1967, appendix.
 /// p(u) du = u0 (1 + u0) / (u0 + u)^2 du,  with u = cos(theta) from the surface normal

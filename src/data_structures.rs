@@ -99,18 +99,24 @@ pub struct AbsorberRegionConfig {
 
 /// Contains information about the kind of location where a particle scattered.
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub enum ScatteringLocation {
-    Wall,
-    Top,
-    Bottom,
+pub enum ScatteringEvent {
+    Start,
+    BoundaryWall,
+    BoundaryTop,
+    BoundaryBottom,
+    IsotopeScattering,
+    Downconversion,
 }
 
-impl ScatteringLocation {
+impl ScatteringEvent {
     pub fn as_str(&self) -> &'static str {
         match self {
-            ScatteringLocation::Wall => "Wall",
-            ScatteringLocation::Top => "Top",
-            ScatteringLocation::Bottom => "Bottom",
+            ScatteringEvent::Start => "Start",
+            ScatteringEvent::BoundaryWall => "Wall",
+            ScatteringEvent::BoundaryTop => "Top",
+            ScatteringEvent::BoundaryBottom => "Bottom",
+            ScatteringEvent::IsotopeScattering => "Isotope",
+            ScatteringEvent::Downconversion => "Downconversion",
         }
     }
 }
@@ -119,11 +125,14 @@ impl ScatteringLocation {
 /// Used for writing scattering data to output file.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ScatteringPoint {
+    pub event_number: usize,
+    pub track_number: usize,
     pub x: f64,
     pub y: f64,
     pub z: f64,
     pub time: f64,
-    pub location: ScatteringLocation,
+    pub energy: f64,
+    pub event: ScatteringEvent,
     #[cfg(debug_assertions)]
     pub is_inside: bool,
 }

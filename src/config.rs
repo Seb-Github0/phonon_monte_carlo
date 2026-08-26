@@ -28,8 +28,11 @@ pub struct Config {
     #[serde(skip)]
     pub output_file_points: String,
 
-    /// Number of particles to simulate.
-    pub number_of_particles: usize,
+    /// Number of events to simulate.
+    pub number_of_events: usize,
+
+    /// Energy of the initial phonons in units J.
+    pub initial_phonon_energy: f64,
 
     /// Whether to use multiprocessing for the simulation.
     /// Uses all available CPU cores if true.
@@ -48,7 +51,7 @@ pub struct Config {
     /// Disable to save disk space.
     /// If enabled, will write to path specified by `output_file_points`.
     ///
-    /// If enabled, it is recommended to reduce `number_of_particles`
+    /// If enabled, it is recommended to reduce `number_of_events`
     /// to avoid (very) large output files.
     pub write_scattering_points: bool,
 
@@ -238,7 +241,7 @@ impl Config {
     /// Check validity of fields provided by the user.
     #[allow(clippy::nonminimal_bool)]
     pub fn check_parameter_validity(&self) -> Result<()> {
-        if self.number_of_particles == 0 {
+        if self.number_of_events == 0 {
             return Err(anyhow!("number_of_particles must be > 0"));
         }
 

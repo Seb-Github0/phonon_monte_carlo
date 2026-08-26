@@ -3,9 +3,9 @@
 use core::f64;
 
 use crate::data_structures::{PointXY, PointXYZ, WallConfig};
-use crate::phonon::Phonon;
+use crate::phonon::{Phonon, PhononState};
 use crate::reflection_models::{rotate_vector_to_normal_hemisphere, uniform_sample_hemisphere};
-use crate::simulate::{EnergyResults, SinTable};
+use crate::simulate::SinTable;
 use fastrand::Rng;
 
 const TOL: f64 = 1e-20;
@@ -289,11 +289,10 @@ impl Wall {
         pt: &mut Phonon,
         polygon_index: PolygonIndex,
         edge_index: EdgeIndex,
-        results: &mut EnergyResults,
         rng: &mut Rng,
         sin_table: &SinTable,
     ) {
-        self.polygons[polygon_index.0].wall_scattering(pt, edge_index, results, rng, sin_table);
+        self.polygons[polygon_index.0].wall_scattering(pt, edge_index, rng, sin_table);
     }
 
     /// Check if point (x, y) is strictly inside the simulation domain
@@ -503,10 +502,13 @@ impl WallPolygon {
         &self,
         pt: &mut Phonon,
         edge_index: EdgeIndex,
-        results: &mut EnergyResults,
         rng: &mut Rng,
         sin_table: &SinTable,
     ) {
+        if self.is_bridge[edge_index.0] {
+            pt.state = PhononState::Lost;
+            return;
+        }
         // unit normal pointing into the domain
         let normal = match &self.segment_types[edge_index.0] {
             Segment::Line { normal, .. } => -normal,
@@ -569,11 +571,6 @@ impl WallPolygon {
                 };
                 //}
             }
-        }
-
-        if self.is_bridge[edge_index.0] {
-            results.e_loss = pt.energy_fraction_remaining;
-            pt.energy_fraction_remaining = 0.0;
         }
     }
 

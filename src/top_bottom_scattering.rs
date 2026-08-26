@@ -5,12 +5,12 @@ use crate::data_structures::{
     DiffuseDistribution, MinMax, PointXY, PointXYZ, Rectangle, SpecularDistribution,
     SpecularityModel, TopBottomScatteringConfig,
 };
-use crate::phonon::Phonon;
+use crate::phonon::{Phonon, PhononState};
 use crate::reflection_models::{
     cosine_sample_hemisphere, sample_phong_model, sample_phong_model_rescaled,
     soffer_rough_sample_hemisphere, uniform_sample_hemisphere,
 };
-use crate::simulate::{EnergyResults, SinTable, SqrtTable};
+use crate::simulate::{SinTable, SqrtTable};
 use fastrand::Rng;
 
 /// Common function for top and bottom surface scattering.
@@ -111,7 +111,6 @@ pub fn top_scattering(
     absorber_region: &AbsorberRegion,
     clamps_top: &[AbsorberPolygon],
     cfg: &Config,
-    results: &mut EnergyResults,
     scattering_cfg: &TopBottomScatteringConfig,
     rng: &mut Rng,
     sin_table: &SinTable,
@@ -120,9 +119,8 @@ pub fn top_scattering(
     // get idx of absorber region, if any, that the particle is in
     let is_inside_absorber = absorber_region.is_inside(pt.x, pt.y);
 
-    if is_inside_absorber {
-        results.e_absorbed_total = pt.energy_fraction_remaining * cfg.absorptivity;
-        pt.energy_fraction_remaining *= 1.0 - cfg.absorptivity;
+    if is_inside_absorber && (rng.f64() < cfg.absorptivity) {
+        pt.state = PhononState::Absorbed;
     }
 
     if cfg.include_clamps {
@@ -130,9 +128,9 @@ pub fn top_scattering(
             .iter()
             .any(|clamp_polygon| clamp_polygon.is_inside(pt.x, pt.y));
 
-        if is_inside_clamp {
-            results.e_loss = pt.energy_fraction_remaining * cfg.clamps_absorptivity;
-            pt.energy_fraction_remaining *= 1.0 - cfg.clamps_absorptivity;
+        if is_inside_clamp && (rng.f64() < cfg.clamps_absorptivity) {
+            pt.state = PhononState::Lost;
+            return;
         }
     }
 
@@ -163,7 +161,6 @@ pub fn bottom_scattering(
     pt: &mut Phonon,
     clamps_bottom: &[AbsorberPolygon],
     cfg: &Config,
-    results: &mut EnergyResults,
     scattering_cfg: &TopBottomScatteringConfig,
     rng: &mut Rng,
     sin_table: &SinTable,
@@ -173,9 +170,9 @@ pub fn bottom_scattering(
         let is_inside_clamp = clamps_bottom
             .iter()
             .any(|clamp_polygon| clamp_polygon.is_inside(pt.x, pt.y));
-        if is_inside_clamp {
-            results.e_loss = pt.energy_fraction_remaining * cfg.clamps_absorptivity;
-            pt.energy_fraction_remaining *= 1.0 - cfg.clamps_absorptivity;
+        if is_inside_clamp && (rng.f64() < cfg.clamps_absorptivity) {
+            pt.state = PhononState::Lost;
+            return;
         }
     }
 
