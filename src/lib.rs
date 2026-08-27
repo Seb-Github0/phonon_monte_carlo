@@ -21,12 +21,8 @@
 //!  - bridge hits **lose entirely** the hitting phonon. There is no chance of the phonon coming back.
 //!
 //! ## Not implemented
-//!  - wavevectors, branches, frequencies
-//!  - Internal elastic scattering
-//!  - down conversion through 3-phonon processes
 //!  - wavevector-dependent scattering
 //!  - materials other than silicon
-//!  - non-convex polygons for outside wall
 //!
 //! ## Getting started
 //! ### Installation and Usage
@@ -382,8 +378,6 @@ fn write_scattering_points(
         Field::new("time", DataType::Float64, false),
         Field::new("energy", DataType::Float64, false),
         Field::new("event", DataType::Utf8, false),
-        #[cfg(debug_assertions)]
-        Field::new("is_inside", DataType::Boolean, false),
     ];
     let schema = Arc::new(Schema::new(fields));
 
@@ -405,8 +399,6 @@ fn write_scattering_points(
         let mut time_values = Vec::with_capacity(scattering_points.len());
         let mut energy_values = Vec::with_capacity(scattering_points.len());
         let mut location_values = Vec::with_capacity(scattering_points.len());
-        #[cfg(debug_assertions)]
-        let mut is_inside_values = Vec::with_capacity(scattering_points.len());
 
         for point in scattering_points {
             event_number_values.push(point.event_number as u32);
@@ -417,16 +409,6 @@ fn write_scattering_points(
             time_values.push(point.time);
             energy_values.push(point.energy);
             location_values.push(point.event.as_str().to_string());
-            #[cfg(debug_assertions)]
-            is_inside_values.push(point.is_inside);
-        }
-
-        #[cfg(debug_assertions)]
-        {
-            let any_point_is_outside = is_inside_values.iter().any(|&val| !val);
-            if !any_point_is_outside {
-                continue;
-            }
         }
 
         let columns: Vec<ArrayRef> = vec![
@@ -438,8 +420,6 @@ fn write_scattering_points(
             Arc::new(Float64Array::from(time_values)),
             Arc::new(Float64Array::from(energy_values)),
             Arc::new(StringArray::from(location_values)),
-            #[cfg(debug_assertions)]
-            Arc::new(arrow_array::BooleanArray::from(is_inside_values)),
         ];
 
         let batch =

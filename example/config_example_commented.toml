@@ -183,7 +183,7 @@ mean_source_depth = 28e-6
 
 [outside_wall]
 # List of XY-Points defining the polygon.
-# Must specify a convex polygon.
+# Must specify the polygon in counter-clockwise order.
 # The last point is connected automatically to the first point to close the polygon.
 points = [[-16250e-6, 18650e-6],
     [-16600e-6, 18360e-6],

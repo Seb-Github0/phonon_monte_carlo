@@ -110,13 +110,13 @@ pub struct Config {
 
     // Outside wall
     /// Defines the outside wall boundary of the simulation domain.
-    /// Must be a convex polygon.
+    /// Must be a polygon specified in counter-clockwise order.
     ///
     /// See `WallConfig` struct for details.
     pub outside_wall: WallConfig,
 
     /// List of inside wall boundaries (holes) in the simulation domain.
-    /// Must be convex polygons.
+    /// Must be polygons specified in counter-clockwise order.
     /// See `WallConfig` struct for details.
     ///
     /// Can be empty or omitted.

@@ -108,10 +108,6 @@ pub fn simulate_particle(
             time: pt.t,
             energy: pt.energy,
             event: ScatteringEvent::Start,
-            // Check that position that is about to be written is valid
-            // This is expensive though, so only do it in debug mode
-            #[cfg(debug_assertions)]
-            is_inside: true,
         };
         scattering_points.push(point);
     }
@@ -165,13 +161,6 @@ pub fn simulate_particle(
                 time: pt.t,
                 energy: pt.energy,
                 event: scattering_location.clone(),
-                // Check that position that is about to be written is valid
-                // This is expensive though, so only do it in debug mode
-                #[cfg(debug_assertions)]
-                is_inside: {
-                    wall.is_inside(intersection_point.x, intersection_point.y, 1e-10)
-                        && (intersection_point.z.abs() <= cfg.thickness * 0.5)
-                },
             };
             scattering_points.push(point);
         }

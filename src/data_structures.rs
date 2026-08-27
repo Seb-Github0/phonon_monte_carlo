@@ -68,7 +68,7 @@ pub struct TopBottomScatteringConfig {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WallConfig {
     /// List of XY-Points defining the polygon.
-    /// *Must* specify a convex polygon.
+    /// *Must* specify the polygon in counter-clockwise order.
     /// The last point is connected to the first point to close the polygon.
     pub points: Vec<PointXY>,
     /// List of booleans indicating whether each edge is a bridge (true) or solid wall (false).
@@ -133,8 +133,6 @@ pub struct ScatteringPoint {
     pub time: f64,
     pub energy: f64,
     pub event: ScatteringEvent,
-    #[cfg(debug_assertions)]
-    pub is_inside: bool,
 }
 
 impl ParticleSource {

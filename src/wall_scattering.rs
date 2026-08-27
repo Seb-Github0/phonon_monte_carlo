@@ -35,22 +35,16 @@ fn circle_center(x1: f64, y1: f64, x2: f64, y2: f64, r: f64) -> PointXY {
     }
 }
 
-/// Check if circle segment between x1 and x2 with center c keeps convexity of polygon.
-fn does_circle_segment_keep_convexity(
-    x1: &PointXY,
-    x2: &PointXY,
-    c: &PointXY,
-    edge_before: &PointXY,
-    edge_after: &PointXY,
-) -> bool {
-    // Calculate radius vector from center to points,
-    // rotate by 90° to get tangent direction,
-    // take cross product with next/previous edge
-    // (last two steps can be simplified to dot product)
-    let tolerance = 1e-6;
-    let bool1 = edge_after.dot(&(c - x2)) >= -tolerance;
-    let bool2 = edge_before.dot(&(c - x1)) <= tolerance;
-    bool1 && bool2
+fn is_circle_segment_less_than_semicircle(a: &PointXY, b: &PointXY, c: &PointXY) -> bool {
+    // check if is outside line from a->b ("outside" defined by normal)
+    let edge = b - a;
+    let normal = PointXY {
+        x: edge.y,
+        y: -edge.x,
+    };
+    let offset = normal.x * a.x + normal.y * a.y;
+
+    normal.x * c.x + normal.y * c.y < offset
 }
 
 /// Check if a point is on an arc segment, assuming the point
@@ -309,21 +303,6 @@ impl Wall {
         }
         true
     }
-
-    /// Same as is_strictly_inside but with tolerance.
-    #[cfg(debug_assertions)]
-    pub fn is_inside(&self, x: f64, y: f64, tolerance: f64) -> bool {
-        for polygon in &self.polygons {
-            let is_inside = polygon.is_inside(x, y, tolerance);
-            // should not be inside a hole (inner wall)
-            // should be inside of outer wall
-            let should_be_inside = polygon.is_outer_wall;
-            if is_inside != should_be_inside {
-                return false;
-            }
-        }
-        true
-    }
 }
 
 #[derive(Debug)]
@@ -404,8 +383,6 @@ impl WallPolygon {
                     segment_types.push(Segment::Line { normal, offset });
                 }
                 r => {
-                    let edge_before = edges[(i + n - 1) % n].clone();
-                    let edge_after = edges[(i + 1) % n].clone();
                     let c = circle_center(
                         points[i].x,
                         points[i].y,
@@ -413,20 +390,10 @@ impl WallPolygon {
                         points[(i + 1) % n].y,
                         r.abs(),
                     );
-                    if !does_circle_segment_keep_convexity(
-                        &points[i],
-                        &points[(i + 1) % n],
-                        &c,
-                        &edge_before,
-                        &edge_after,
-                    ) {
-                        panic!("Circle segment at edge {i} with radius {r} breaks outer wall convexity. 
-                            Points: ({},{}) to ({},{}). Edges: before=({},{}) after=({},{}) Center=({},{})",
-                            points[i].x, points[i].y,
-                            points[(i+1)%n].x, points[(i+1)%n].y,
-                            edge_before.x, edge_before.y,
-                            edge_after.x, edge_after.y,
-                            c.x, c.y
+                    if !is_circle_segment_less_than_semicircle(&points[i], &points[(i + 1) % n], &c)
+                    {
+                        panic!("Circle segment at edge {i} with radius {r} is larger than a semicircle. 
+                            Consider splitting it into two smaller circle segments.",
                         );
                     }
                     segment_types.push(Segment::Arc {
@@ -457,41 +424,23 @@ impl WallPolygon {
         let mut min_time = t_min;
         let mut min_edge_index = EdgeIndex(0);
 
-        if self.is_outer_wall {
-            for (i, segment) in self.segment_types.iter().enumerate() {
-                let a = &self.points[i];
-                let b = &self.points_rolled[i];
-                let result = match segment {
-                    Segment::Line { normal, offset } => {
-                        intersect_particle_with_line(pt, normal, *offset, min_time)
-                    }
-                    Segment::Arc { center, r_sqr } => {
-                        intersect_particle_with_circle_segment(pt, a, b, center, *r_sqr, min_time)
-                    }
-                };
-                if let Some(t) = result {
-                    min_time = t;
-                    min_edge_index = EdgeIndex(i);
+        for (i, segment) in self.segment_types.iter().enumerate() {
+            let a = &self.points[i];
+            let b = &self.points_rolled[i];
+            let result = match segment {
+                Segment::Line { normal, offset } => {
+                    intersect_particle_with_line_segment(pt, normal, *offset, a, b, min_time)
                 }
-            }
-        } else {
-            for (i, segment) in self.segment_types.iter().enumerate() {
-                let a = &self.points[i];
-                let b = &self.points_rolled[i];
-                let result = match segment {
-                    Segment::Line { normal, offset } => {
-                        intersect_particle_with_line_segment(pt, normal, *offset, a, b, min_time)
-                    }
-                    Segment::Arc { center, r_sqr } => {
-                        intersect_particle_with_circle_segment(pt, a, b, center, *r_sqr, min_time)
-                    }
-                };
-                if let Some(t) = result {
-                    min_time = t;
-                    min_edge_index = EdgeIndex(i);
+                Segment::Arc { center, r_sqr } => {
+                    intersect_particle_with_circle_segment(pt, a, b, center, *r_sqr, min_time)
                 }
+            };
+            if let Some(t) = result {
+                min_time = t;
+                min_edge_index = EdgeIndex(i);
             }
         }
+
         (min_time, min_edge_index)
     }
 
@@ -574,64 +523,49 @@ impl WallPolygon {
         }
     }
 
-    /// Check if point (x, y) is strictly inside this wall polygon.
     pub fn is_strictly_inside(&self, x: f64, y: f64) -> bool {
-        // This assumes a convex polygon with segments stated in counter-clockwise order.
+        let mut is_inside = false;
         for i in 0..self.n {
             let a = &self.points[i];
             let b = &self.points_rolled[i];
             let segment = &self.segment_types[i];
-            let is_outside = match segment {
-                Segment::Line { normal, offset } => {
-                    if self.is_outer_wall {
-                        normal.x * x + normal.y * y > *offset
-                    } else {
-                        (-normal.x) * x + (-normal.y) * y > -*offset
-                    }
-                }
+
+            let ray_intersects_segment = match segment {
+                Segment::Line { .. } => does_horizontal_ray_intersect_line_segment(x, y, a, b),
                 Segment::Arc { center, r_sqr } => {
-                    !is_strictly_inside_at_circle_segment(x, y, a, b, center, *r_sqr)
+                    does_horizontal_ray_intersect_circle_segment(x, y, a, b, center, *r_sqr)
                 }
             };
-            if is_outside {
-                return false;
+            if ray_intersects_segment {
+                is_inside = !is_inside
             }
         }
-
-        true
-    }
-
-    #[inline(always)]
-    #[cfg(debug_assertions)]
-    pub fn is_inside(&self, x: f64, y: f64, tolerance: f64) -> bool {
-        for i in 0..self.n {
-            let a = &self.points[i];
-            let b = &self.points_rolled[i];
-            let segment = &self.segment_types[i];
-            let is_outside = match segment {
-                Segment::Line { normal, offset } => {
-                    if self.is_outer_wall {
-                        normal.x * x + normal.y * y - tolerance > *offset
-                    } else {
-                        (-normal.x) * x + (-normal.y) * y - tolerance > -*offset
-                    }
-                }
-                Segment::Arc { center, r_sqr } => {
-                    !is_inside_at_circle_segment(x, y, a, b, center, *r_sqr, tolerance)
-                }
-            };
-            if is_outside {
-                return false;
-            }
-        }
-        true
+        is_inside
     }
 }
 
-/// For convex polygon, check if point is inside at arc segment
-/// as part of the is_strictly_inside checks.
 #[inline(always)]
-fn is_strictly_inside_at_circle_segment(
+fn does_horizontal_ray_intersect_line_segment(x: f64, y: f64, a: &PointXY, b: &PointXY) -> bool {
+    let (min_y, max_y) = if a.y < b.y { (a.y, b.y) } else { (b.y, a.y) };
+    let (min_x, max_x) = if a.x < b.x { (a.x, b.x) } else { (b.x, a.x) };
+
+    if y <= min_y || y > max_y {
+        // handles also case a.y=b.y
+        return false;
+    }
+    if x > max_x {
+        return false;
+    }
+    if x <= min_x {
+        return true;
+    }
+
+    let x_intersection = a.x + (y - a.y) * (b.x - a.x) / (b.y - a.y);
+    x <= x_intersection
+}
+
+#[inline(always)]
+fn does_horizontal_ray_intersect_circle_segment(
     x: f64,
     y: f64,
     a: &PointXY,
@@ -639,15 +573,10 @@ fn is_strictly_inside_at_circle_segment(
     center: &PointXY,
     r_sqr: f64,
 ) -> bool {
-    // Strategy:
-    // 1. Consider the Circle segment as a line, check if would be inside. Then:
-    //    If so: ok already
-    // 2. If not, it is still inside (on the area segment between the circle and the line connecting a and b)
-    //            if and only if it is inside the full circle
+    let intersects_line = does_horizontal_ray_intersect_line_segment(x, y, a, b);
+    // Line check handles majority of the cases, but misses exactly the area between line
+    // and circle segment. This can be checked from line eqn. and circle inside check.
 
-    // Compute normal pointing outside the polygon.
-    // This assumes that a and b are specified in counter-clockwise order.
-    // The normal is not normalized but this is fine here.
     let edge = b - a;
     let normal = PointXY {
         x: edge.y,
@@ -655,36 +584,8 @@ fn is_strictly_inside_at_circle_segment(
     };
     let offset = normal.x * a.x + normal.y * a.y;
 
-    let is_inside_line = normal.x * x + normal.y * y < offset;
+    let is_outside_line = normal.x * x + normal.y * y >= offset;
     let is_inside_circle = (x - center.x).powi(2) + (y - center.y).powi(2) < r_sqr;
 
-    is_inside_line || is_inside_circle
-}
-
-#[inline(always)]
-#[cfg(debug_assertions)]
-fn is_inside_at_circle_segment(
-    x: f64,
-    y: f64,
-    a: &PointXY,
-    b: &PointXY,
-    center: &PointXY,
-    r_sqr: f64,
-    tolerance: f64,
-) -> bool {
-    // Same as is_strictly_inside_at_circle_segment but with tolerance for points close to the boundary
-    let edge = b - a;
-    let normal = PointXY {
-        x: edge.y,
-        y: -edge.x,
-    };
-    let offset = normal.x * a.x + normal.y * a.y;
-
-    let is_inside_line = normal.x * x + normal.y * y < offset + tolerance;
-
-    let r = r_sqr.sqrt();
-    let is_inside_circle =
-        (x - center.x).powi(2) + (y - center.y).powi(2) < r_sqr + 2.0 * r * tolerance;
-
-    is_inside_line || is_inside_circle
+    intersects_line || (is_outside_line && is_inside_circle)
 }
