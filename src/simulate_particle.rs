@@ -2,7 +2,7 @@
 
 use crate::config::Config;
 use crate::data_structures::{PointXYZ, ScatteringEvent, ScatteringPoint};
-use crate::downconversion::{calculate_downconversion_rate, downconversion};
+use crate::anharmonic_decay::{calculate_downconversion_rate, downconversion};
 use crate::isotope_scattering::{
     calculate_isotope_scattering_rate, isotope_scattering, sample_flight_time,
 };

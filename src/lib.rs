@@ -141,7 +141,7 @@ use std::sync::Arc;
 
 pub mod config;
 pub mod data_structures;
-mod downconversion;
+mod anharmonic_decay;
 mod isotope_scattering;
 mod materials;
 mod phonon;

@@ -163,12 +163,12 @@ fn make_TT_secondaries(pt: &mut Phonon, rng: &mut Rng) -> (Phonon, Phonon) {
     (phonon1, phonon2)
 }
 
-const VL_OVER_VT: f64 = Si::SPEED_L / Si::SPEED_T;
+
 #[allow(non_upper_case_globals)]
 fn get_lt_decay_prob(x: f64) -> f64 {
     // Taken from G4CMP code, checked to be identical and < 2.8
     // I never checked these against Tamura1985, I felt too dumb
-    let d = VL_OVER_VT;
+    let d = Si::LATTICE_DELTA;
     // x: fraction of energy in longitudinal mode, x=E_L'/E_L
     (1.0 / (x * x))
         * (1.0 - x * x)
@@ -182,7 +182,7 @@ fn get_lt_decay_prob(x: f64) -> f64 {
 fn get_tt_decay_prob(x: f64) -> f64 {
     // Taken from G4CMP code, checked to be identical and < 0.8
     // I never checked these against Tamura1985, I felt too dumb
-    const d: f64 = VL_OVER_VT;
+    const d: f64 = Si::LATTICE_DELTA;
     // dynamic constants from Tamura, PRL31, 1985
     const beta: f64 = Si::LATTICE_BETA / 1e11;
     const gamma: f64 = Si::LATTICE_GAMMA / 1e11;
@@ -201,10 +201,12 @@ fn get_tt_decay_prob(x: f64) -> f64 {
         )
 }
 
+#[allow(non_upper_case_globals)]
 fn sample_lt_energy_fraction(rng: &mut Rng) -> f64 {
     // use rejection sampling to sample according to get_lt_decay_prob
-    let upper_bound = 1.0;
-    let lower_bound = (VL_OVER_VT - 1.0) / (VL_OVER_VT + 1.0);
+    const d: f64 = Si::LATTICE_DELTA;
+    const upper_bound: f64 = 1.0;
+    const lower_bound: f64 = (d - 1.0) / (d + 1.0);
 
     let limit = 2.8; // checked that get_lt_decay_prob < 2.8 for all x 
     loop {
@@ -220,14 +222,15 @@ fn sample_lt_energy_fraction(rng: &mut Rng) -> f64 {
 #[allow(non_upper_case_globals)]
 fn sample_tt_energy_fraction(rng: &mut Rng) -> f64 {
     // use rejection sampling to sample according to get_tt_decay_prob
-    const upper_bound: f64 = (1.0 + (1.0 / VL_OVER_VT)) / 2.0;
-    const lower_bound: f64 = (1.0 - (1.0 / VL_OVER_VT)) / 2.0;
+    const d: f64 = Si::LATTICE_DELTA;
+    const upper_bound: f64 = (1.0 + (1.0 / d)) / 2.0;
+    const lower_bound: f64 = (1.0 - (1.0 / d)) / 2.0;
 
-    let limit = 0.8; // checked that get_tt_decay_prob < 0.8 for all x*d
+    let limit = 1.2; // checked that get_tt_decay_prob < 1.2 for all x*d
     loop {
         let u = rng.f64();
         let x = rng.f64() * (upper_bound - lower_bound) + lower_bound;
-        let p = get_tt_decay_prob(x * VL_OVER_VT);
+        let p = get_tt_decay_prob(x * d);
         if u * limit < p {
             return x;
         };
@@ -237,20 +240,20 @@ fn sample_tt_energy_fraction(rng: &mut Rng) -> f64 {
 #[inline(always)]
 fn make_l_deviation_angle(x: f64) -> f64 {
     // Taken from G4CMP code, checked to be identical
-    let d = VL_OVER_VT;
+    let d = Si::LATTICE_DELTA;
     f64::acos((1.0 + x * x - d * d * ((1.0 - x) * (1.0 - x))) / (2.0 * x))
 }
 
 #[inline(always)]
 fn make_t_deviation_angle(x: f64) -> f64 {
     // Taken from G4CMP code, checked to be identical
-    let d = VL_OVER_VT;
+    let d = Si::LATTICE_DELTA;
     f64::acos((1.0 - x * x + d * d * ((1.0 - x) * (1.0 - x))) / (2.0 * d * (1.0 - x)))
 }
 
 #[inline(always)]
 fn make_tt_deviation_angle(x: f64) -> f64 {
     // Taken from G4CMP code, checked to be identical
-    let d = VL_OVER_VT;
+    let d = Si::LATTICE_DELTA;
     f64::acos((1.0 - d * d * ((1.0 - x) * (1.0 - x)) + d * d * (x * x)) / (2.0 * d * x))
 }

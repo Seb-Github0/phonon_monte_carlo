@@ -13,4 +13,4 @@ from .phonon_monte_carlo import run
 
 __all__ = ["run"]
 
-version = "0.2.0"
+version = "0.2.1"
