@@ -11,6 +11,6 @@ Example
 
 from .phonon_monte_carlo import run
 
-__all__ = ["run"]
+__all__ = ["run", "version"]
 
-version = "0.2.1"
+version = "0.2.2"

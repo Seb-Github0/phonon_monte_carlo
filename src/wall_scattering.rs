@@ -152,6 +152,7 @@ fn intersect_particle_with_circle_segment(
     b: &PointXY,
     center: &PointXY,
     r_sqr: f64,
+    is_outer_wall: bool,
     t_min: f64,
 ) -> Option<f64> {
     // Particle trajectory: (x, y, z) + t*(vx, vy, vz)
@@ -175,28 +176,26 @@ fn intersect_particle_with_circle_segment(
     }
     let sqrt_disc = discriminant.sqrt();
     let inv_denom = 0.5 / a_;
-    let t1 = (-b_ - sqrt_disc) * inv_denom;
-    let t2 = (-b_ + sqrt_disc) * inv_denom; // t1 <= t2
 
-    // Check both intersections
-    let tol = TOL;
-    if t2 <= tol {
-        return None; // Both intersections are behind the particle
-    }
-    let p_int_1 = PointXY {
-        x: pt.x + pt.vx * t1,
-        y: pt.y + pt.vy * t1,
+    // Only one of the two roots can be a real wall hit:
+    //  - Outer wall: the domain is inside the circle, so the particle hits the
+    //    arc when leaving the circle (larger root).
+    //  - Hole: the domain is outside the circle, so the particle hits the arc
+    //    when entering the circle (smaller root).
+    // The other root is behind the particle, or, right after scattering at this
+    // arc, a spurious t ≈ 0 that rounding can push slightly positive.
+    let t = if is_outer_wall {
+        (-b_ + sqrt_disc) * inv_denom
+    } else {
+        (-b_ - sqrt_disc) * inv_denom
     };
-    if t1 > tol && t1 < t_min && is_on_circle_segment(&p_int_1, center, a, b) {
-        return Some(t1);
+    if t <= TOL || t >= t_min {
+        return None;
     }
 
-    let p_int_2 = PointXY {
-        x: pt.x + pt.vx * t2,
-        y: pt.y + pt.vy * t2,
-    };
-    if t2 > tol && t2 < t_min && is_on_circle_segment(&p_int_2, center, a, b) {
-        return Some(t2);
+    let p = PointXY { x: pt.x + pt.vx * t, y: pt.y + pt.vy * t };
+    if is_on_circle_segment(&p, center, a, b) { 
+        return Some(t);
     }
     None
 }
@@ -432,7 +431,7 @@ impl WallPolygon {
                     intersect_particle_with_line_segment(pt, normal, *offset, a, b, min_time)
                 }
                 Segment::Arc { center, r_sqr } => {
-                    intersect_particle_with_circle_segment(pt, a, b, center, *r_sqr, min_time)
+                    intersect_particle_with_circle_segment(pt, a, b, center, *r_sqr, self.is_outer_wall, min_time)
                 }
             };
             if let Some(t) = result {
@@ -586,6 +585,11 @@ fn does_horizontal_ray_intersect_circle_segment(
 
     let is_outside_line = normal.x * x + normal.y * y >= offset;
     let is_inside_circle = (x - center.x).powi(2) + (y - center.y).powi(2) < r_sqr;
+    let is_inside_circular_segment = is_outside_line && is_inside_circle;
 
-    intersects_line || (is_outside_line && is_inside_circle)
+        if is_inside_circular_segment {
+        !intersects_line
+    } else {
+        intersects_line
+    }
 }
