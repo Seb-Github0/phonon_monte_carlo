@@ -1,22 +1,40 @@
-output_folder = "cool_example"
-number_of_particles = 1000
-temperature = 300
+output_folder = "example"
+number_of_events = 1000
+use_multiprocessing = true
+num_workers = 4
 write_scattering_points = false
 write_absorbed_energy = false
 write_lost_energy = false
-use_multiprocessing = true
-num_workers = 5
-time_total = 0.0001
+initial_phonon_energy = 4e-21
+time_total = 0.001
 time_bin_size = 2e-7
 material = "Si"
 default_speed = 6000.0
-use_branch_speed = false
+use_branch_speed = true
 absorptivity = 1.0
 include_clamps = false
 clamps_absorptivity = 1.0
-include_internal_scattering = false
 thickness = 0.00038
 is_two_dimensional_material = false
+
+
+[absorbers]
+polygons = [
+    [
+        [-0.001,-0.001],
+        [0.001,-0.001],
+        [0.001,0.001],
+        [-0.001,0.001],
+        [-0.001,-0.001],
+    ],
+]
+
+[clamps_top]
+polygons = []
+
+[clamps_bottom]
+polygons = []
+
 
 [top_scattering_config]
 specularity_model = "Constant"
@@ -33,12 +51,6 @@ specularity_roughness_prefactor = 0.0
 specular_distribution = "Ideal"
 phong_exponent = 100
 diffuse_distribution = "Uniform"
-
-[clamps_top]
-polygons = []
-
-[clamps_bottom]
-polygons = []
 
 [post_processing]
 calculate_sensor_temperature = false
@@ -64,29 +76,3 @@ is_bridge = [false, false, false, false]
 circle_radius = [0.005, 0.005, 0.005, 0.005]
 diffuse_scattering = true
 is_outside = true
-
-[absorbers]
-polygons = [
-    [
-        [
-            -0.001,
-            -0.001,
-        ],
-        [
-            0.001,
-            -0.001,
-        ],
-        [
-            0.001,
-            0.001,
-        ],
-        [
-            -0.001,
-            0.001,
-        ],
-        [
-            -0.001,
-            -0.001,
-        ],
-    ],
-]

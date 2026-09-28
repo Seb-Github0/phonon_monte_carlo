@@ -1,22 +1,25 @@
-//! Version 0.1.0
+//! Version 0.2.3
 //! # Phonon Monte Carlo
 //! A Monte Carlo simulator for phonon transport.
 //! The goal is simulating the phonons after an event in the P2 Photon Detector, to:  
 //! 1. Estimate the fraction of energy lost through the bridges.  
-//! 2. Estimate the timeline of energy absorbed in the absorber regions, including rise time.  
+//! 2. Estimate the timeline of energy collected in the phonon collector regions, including rise time.  
 //!
 //! The simulation models phonons as particles moving through a silicon, with either specular or diffuse scattering at the boundaries. Absorption occurs when phonons hit absorber regions at the top.
 //!
 //! This work started originally from the python project FreePATHS by Roman Anufriev (GPL3 license), which can be found at:  
-//! <https://anufrievroman.gitbook.io/freepaths>
-//! None of this code still remains any more.
+//! <https://anufrievroman.gitbook.io/freepaths> 
+//! 
+//! In addition, the implementation of anharmonic decay was ported and integrated from G4CMP (Geant4 Condensed Matter Physics), 
+//! <https://confluence.slac.stanford.edu/spaces/G4CMP/overview> .
 //!
 //! ## Assumptions
 //! The current model makes these simplifying assumptions:
 //!  - Each photon absorption events is a **point source** of many athermal phonons.
-//!  - all phonons have the **same speed**, independent of frequency, branch, or direction
+//!  - all phonons travel at the branch-dependent **direction-averaged group velocity**, independent of energy or direction
+//!  - elastic **isotope scattering** and **anharmonic decay** inside the silicon, with the mean free path dependent on the energy
 //!  - top and bottom surfaces have a **fixed probability of specular vs diffuse scattering**, independent of angle of incidence or wavevector
-//!  - absorbers **absorb a fixed fraction** of phonon energy when hit, independent of angle of incidence or wavevector
+//!  - absorbers have a **fixed probability** of absorbing the phonon when hit, independent of angle of incidence or wavevector
 //!  - the phonons transmitted to the absorber **thermalize instantly in the absorber**
 //!  - bridge hits **lose entirely** the hitting phonon. There is no chance of the phonon coming back.
 //!
@@ -71,17 +74,16 @@
 //! The current model is one of the simplest possible. It is probably not quantitatively accurate.
 //! Still, it gives a first estimate of the expected energy loss and timing characteristics due to different geometries.
 //!  
-//! As a next step, wavevectors, branches and frequencies could implemented.
+//! As a next step, wavevectors and anisotropic phonon propagation could implemented.
 //! The most important unconsidered effect is likely wavevector-dependent scattering at rough surfaces,
 //! as the distribution (e.g. Lambertian vs. uniform) after diffuse scattering strongly affects the results.  
 //!
-//! Internal scattering and down-conversion add some diffuseness as well, but are likely less important than surface scattering.
 //! However, since for wavevector-dependent surface scattering the theoretical models are debatable and incomplete (to my knowledge),
 //! and the necessary parameters (roughness, roughness autocorrelation length) are hard to measure accurately for the entire wafer, we stop at this simple model for now.
 //! We instead go back to an experimental approach.
 //!
 //! Provided under a GPL3 license, see license file.  
-//! Sebastian Hilscher, June 2026
+//! Sebastian Hilscher, October 2026
 //!
 //! ## Example
 //! ```python
@@ -96,12 +98,12 @@
 //! import phonon_monte_carlo
 //! import toml
 //!
-//! # Assume that a file old_config.toml has previously been created
+//! # Assume that a file example_config.toml has previously been created
 //! # Let's say you want to make a change to it
-//! config = toml.load("old_config.toml")
-//! config["number_of_particles"] = 10000
+//! config = toml.load("example_config.toml")
+//! config["number_of_particles"] = 1000
 //! config["output_folder"] = "cool_example"
-//! with open("config.toml", "w") as f:
+//! with open("cool_example/config.toml", "w") as f:
 //!     toml.dump(config, f)
 //! os.makedirs("cool_example", exist_ok=True)
 //!
@@ -110,10 +112,10 @@
 //! sources_Y = np.zeros(10)
 //! sources_Z = np.zeros(10)
 //! sources = pd.DataFrame({"Source X": sources_X, "Source Y": sources_Y, "Source Z": sources_Z})
-//! sources.to_parquet("sources.parquet")
+//! sources.to_parquet("cool_example/sources.parquet")
 //!
 //! # Run simulation for all sources
-//! phonon_monte_carlo.run("config.toml", "sources.parquet")
+//! phonon_monte_carlo.run("cool_example/config.toml", "cool_example/sources.parquet")
 //!
 //! # Evaluate output
 //! df = pd.read_parquet("cool_example/output.parquet")
@@ -152,46 +154,6 @@ mod simulate_particle;
 mod top_bottom_scattering;
 mod wall_scattering;
 
-// Main function.
-//
-// Parses command line arguments to get input file, loads configuration file,
-// checks parameter validity, and starts the simulation.
-// See module 'simulate' for simulation functions.
-// pub fn main() {
-//     // Get input file from command line arguments
-//     let args: Vec<String> = std::env::args().collect();
-//     if args.len() < 2 {
-//         eprintln!(
-//             "Error: No input file provided.\n
-//             Usage: phonon_monte_carlo.exe -input=\"path/to/config.toml\""
-//         );
-//         std::process::exit(1);
-//     }
-//     let mut input_file = "";
-//     let mut sources_file = "";
-//     let mut verbose = true;
-//     for arg in args.iter().skip(1) {
-//         if arg.starts_with("-input=") {
-//             input_file = arg.trim_start_matches("-input=").trim_matches('"');
-//         }
-//         if arg.starts_with("-sources=") {
-//             sources_file = arg.trim_start_matches("-sources=").trim_matches('"');
-//         }
-//         if arg.starts_with("--quiet") {
-//             verbose = false;
-//         }
-//     }
-
-//     if input_file.is_empty() {
-//         eprintln!("Error: No input file provided with -input=\"...\"");
-//         std::process::exit(1);
-//     }
-
-//     match run_main(input_file, sources_file, verbose) {
-//         Ok(stdout) => println!("{}", stdout),
-//         Err(e) => eprintln!("{}", e),
-//     };
-// }
 
 #[pyfunction]
 #[pyo3(signature = (config, sources=None, quiet=false))]

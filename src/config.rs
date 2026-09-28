@@ -49,7 +49,6 @@ pub struct Config {
     /// Whether to write scattering points to output file.
     /// Only works in single-threaded mode (`use_multiprocessing = false`)
     /// Disable to save disk space.
-    /// If enabled, will write to path specified by `output_file_points`.
     ///
     /// If enabled, it is recommended to reduce `number_of_events`
     /// to avoid (very) large output files.
@@ -89,10 +88,6 @@ pub struct Config {
     /// This probability is assumed to be constant, independent of incidence angle.
     pub absorptivity: f64,
 
-    // Internal scattering
-    /// Whether to include internal scattering events in the simulation.
-    /// Currently not implemented.
-    pub include_internal_scattering: bool,
 
     // System dimensions
     /// Thickness of the material in meters (z-dimension).
@@ -184,12 +179,12 @@ pub struct BoundaryScatteringConfig {
     /// If "Uniform", all angles are equally probable.
     /// This weights angles close to the surface more strongly compared to "Lambertian".
     ///
-    /// If "SofferRough", uses the distribution suggested in the paper [Sof67] for
+    /// If "SofferRough", uses the distribution suggested in the paper \[Sof67\] for
     /// surface roughness correlation length L=0 and the limit of infinite roughness.
     /// This distribution weights angles close to the surface even more strongly
     /// than "Uniform" does.
-    /// [Sof67] Stephen B. Soffer; Statistical Model for the Size Effect in Electrical Conduction.
-    ///         J. Appl. Phys. 15 March 1967; 38 (4): 1710–1715. https://doi.org/10.1063/1.1709746
+    /// \[Sof67\] Stephen B. Soffer; Statistical Model for the Size Effect in Electrical Conduction.
+    ///         J. Appl. Phys. 15 March 1967; 38 (4): 1710–1715. <https://doi.org/10.1063/1.1709746>
     pub diffuse_distribution: String,
 }
 
